@@ -84,6 +84,7 @@ data Extension =
     | Ext_escaped_line_breaks     -- ^ Treat a backslash at EOL as linebreak
     | Ext_link_attributes     -- ^ MMD style reference link attributes
     | Ext_autolink_bare_uris  -- ^ Make all absolute URIs into links
+    | Ext_shortcut_ref_links  -- ^ No empty [] after collapsed reference links
     | Ext_fancy_lists         -- ^ Enable fancy list numbers and delimiters
     | Ext_lists_without_preceding_blankline -- ^ Allow lists without preceding blank
     | Ext_startnum            -- ^ Make start number of ordered list significant
@@ -151,6 +152,7 @@ pandocExtensions = Set.fromList
   , Ext_header_attributes
   , Ext_implicit_header_references
   , Ext_line_blocks
+  , Ext_shortcut_ref_links
   ]
 
 phpMarkdownExtraExtensions :: Set Extension

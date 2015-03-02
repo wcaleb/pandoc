@@ -690,8 +690,11 @@ getReference label (src, tit) = do
 inlineListToMarkdown :: WriterOptions -> [Inline] -> State WriterState Doc
 inlineListToMarkdown opts lst = do
   inlist <- gets stInList
+  let list = if isEnabled Ext_shortcut_ref_links opts
+                then spaceAdjacentLinks lst
+                else lst
   mapM (inlineToMarkdown opts)
-     (if inlist then avoidBadWraps lst else lst) >>= return . cat
+     (if inlist then avoidBadWraps list else list) >>= return . cat
   where avoidBadWraps [] = []
         avoidBadWraps (Space:Str ('>':cs):xs) =
           Str (' ':'>':cs) : avoidBadWraps xs
@@ -711,6 +714,10 @@ inlineListToMarkdown opts lst = do
                                      '.':_ -> True
                                      ')':_ -> True
                                      _     -> False
+        spaceAdjacentLinks [] = []
+        spaceAdjacentLinks ((Link a b):(Link c d):xs) = (Link a b) : Space : (Link c d) : spaceAdjacentLinks xs
+        spaceAdjacentLinks ((Link a b):Str ('[':cs):xs) = (Link a b): Space : Str('[':cs) : spaceAdjacentLinks xs
+        spaceAdjacentLinks (x:xs) = x : spaceAdjacentLinks xs
 
 isRight :: Either a b -> Bool
 isRight (Right _) = True
@@ -882,7 +889,9 @@ inlineToMarkdown opts (Link txt (src, tit)) = do
               else if useRefLinks
                       then let first  = "[" <> linktext <> "]"
                                second = if txt == ref
-                                           then "[]"
+                                           then if isEnabled Ext_shortcut_ref_links opts 
+                                                   then ""
+                                                   else "[]"
                                            else "[" <> reftext <> "]"
                            in  first <> second
                       else if plain
