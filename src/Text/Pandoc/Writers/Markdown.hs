@@ -690,11 +690,7 @@ getReference label (src, tit) = do
 inlineListToMarkdown :: WriterOptions -> [Inline] -> State WriterState Doc
 inlineListToMarkdown opts lst = do
   inlist <- gets stInList
-  let list = if isEnabled Ext_shortcut_ref_links opts
-                then spaceAdjacentLinks lst
-                else lst
-  mapM (inlineToMarkdown opts)
-     (if inlist then avoidBadWraps list else list) >>= return . cat
+  cat `fmap` inToMarkdown (if inlist then avoidBadWraps lst else lst)
   where avoidBadWraps [] = []
         avoidBadWraps (Space:Str ('>':cs):xs) =
           Str (' ':'>':cs) : avoidBadWraps xs
@@ -714,10 +710,18 @@ inlineListToMarkdown opts lst = do
                                      '.':_ -> True
                                      ')':_ -> True
                                      _     -> False
-        spaceAdjacentLinks [] = []
-        spaceAdjacentLinks ((Link a b):(Link c d):xs) = (Link a b) : Space : (Link c d) : spaceAdjacentLinks xs
-        spaceAdjacentLinks ((Link a b):Str ('[':cs):xs) = (Link a b): Space : Str('[':cs) : spaceAdjacentLinks xs
-        spaceAdjacentLinks (x:xs) = x : spaceAdjacentLinks xs
+        inToMarkdown [] = return []
+        inToMarkdown (i:is) = case i of 
+
+            (Link _ _)  -> case is of
+                (Link _ _):_          -> go opts{ writerExtensions = Set.delete Ext_shortcut_ref_links $ writerExtensions opts }
+                Space:(Link _ _):_    -> go opts{ writerExtensions = Set.delete Ext_shortcut_ref_links $ writerExtensions opts }
+                _                     -> go opts
+            _ -> go opts
+          where go options = do
+                 iMark <- (inlineToMarkdown options i)
+                 isMark <- inToMarkdown is
+                 return (iMark : isMark)
 
 isRight :: Either a b -> Bool
 isRight (Right _) = True
