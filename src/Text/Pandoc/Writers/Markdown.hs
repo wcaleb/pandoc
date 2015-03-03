@@ -690,38 +690,43 @@ getReference label (src, tit) = do
 inlineListToMarkdown :: WriterOptions -> [Inline] -> State WriterState Doc
 inlineListToMarkdown opts lst = do
   inlist <- gets stInList
-  cat `fmap` inToMarkdown (if inlist then avoidBadWraps lst else lst)
-  where avoidBadWraps [] = []
-        avoidBadWraps (Space:Str ('>':cs):xs) =
-          Str (' ':'>':cs) : avoidBadWraps xs
-        avoidBadWraps (Space:Str [c]:[])
-          | c `elem` "-*+" = Str [' ', c] : []
-        avoidBadWraps (Space:Str [c]:Space:xs)
-          | c `elem` "-*+" = Str [' ', c] : Space : avoidBadWraps xs
-        avoidBadWraps (Space:Str cs:Space:xs)
-          | isOrderedListMarker cs = Str (' ':cs) : Space : avoidBadWraps xs
-        avoidBadWraps (Space:Str cs:[])
-          | isOrderedListMarker cs = Str (' ':cs) : []
-        avoidBadWraps (x:xs) = x : avoidBadWraps xs
-        isOrderedListMarker xs = endsWithListPunct xs &&
-                      isRight (runParserT (anyOrderedListMarker >> eof)
-                               defaultParserState "" xs)
-        endsWithListPunct xs = case reverse xs of
-                                     '.':_ -> True
-                                     ')':_ -> True
-                                     _     -> False
-        inToMarkdown [] = return []
-        inToMarkdown (i:is) = case i of 
+  go (if inlist then avoidBadWraps lst else lst)
+  where go [] = return empty
+        go (i:is) = liftM2 (<>) (inlineToMarkdown (opts' (i:is)) i) (go is)
+        -- check to see if link is shortcutable; disable shortcut extension if not
+        opts' ((Link _ _):is) = case is of
+                         (Link _ _):_        -> disableShortcut
+                         Space:(Link _ _):_  -> disableShortcut
+                         _                   -> opts
+        opts' _ = opts 
+        disableShortcut = opts{ writerExtensions = Set.delete
+                                 Ext_shortcut_ref_links $
+                                 writerExtensions opts}
 
-            (Link _ _)  -> case is of
-                (Link _ _):_          -> go opts{ writerExtensions = Set.delete Ext_shortcut_ref_links $ writerExtensions opts }
-                Space:(Link _ _):_    -> go opts{ writerExtensions = Set.delete Ext_shortcut_ref_links $ writerExtensions opts }
-                _                     -> go opts
-            _ -> go opts
-          where go options = do
-                 iMark <- (inlineToMarkdown options i)
-                 isMark <- inToMarkdown is
-                 return (iMark : isMark)
+avoidBadWraps :: [Inline] -> [Inline]
+avoidBadWraps [] = []
+avoidBadWraps (Space:Str ('>':cs):xs) =
+  Str (' ':'>':cs) : avoidBadWraps xs
+avoidBadWraps (Space:Str [c]:[])
+  | c `elem` "-*+" = Str [' ', c] : []
+avoidBadWraps (Space:Str [c]:Space:xs)
+  | c `elem` "-*+" = Str [' ', c] : Space : avoidBadWraps xs
+avoidBadWraps (Space:Str cs:Space:xs)
+  | isOrderedListMarker cs = Str (' ':cs) : Space : avoidBadWraps xs
+avoidBadWraps (Space:Str cs:[])
+  | isOrderedListMarker cs = Str (' ':cs) : []
+avoidBadWraps (x:xs) = x : avoidBadWraps xs
+
+isOrderedListMarker :: [Char] -> Bool
+isOrderedListMarker xs = endsWithListPunct xs &&
+              isRight (runParserT (anyOrderedListMarker >> eof)
+                       defaultParserState "" xs)
+
+endsWithListPunct :: [Char] -> Bool
+endsWithListPunct xs = case reverse xs of
+                             '.':_ -> True
+                             ')':_ -> True
+                             _     -> False
 
 isRight :: Either a b -> Bool
 isRight (Right _) = True
